@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Uploader and QA System</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .left-side {
+            width: 28%;
+            background-color: #2e2e2e;
+            color: #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .right-side {
+            width: 72%;
+            background-color: #2e2e2e;
+            color: #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            padding: 20px;
+        }
+        .upload-section {
+            flex: 1;
+            overflow: auto;
+        }
+        .file-list {
+            max-height: calc(100vh - 140px); /* Adjust based on button height and padding */
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .file-name {
+            flex: 1;
+        }
+        .progress-circle {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #007bff;
+            border-radius: 50%;
+            margin-left: 10px;
+            position: relative;
+        }
+        .progress-circle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            background-color: #007bff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .progress-complete {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #28a745;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .btn-submit {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-submit:hover {
+            background-color: #0056b3;
+        }
+        .btn-submit.completed {
+            background-color: #28a745;
+        }
+        .response {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            min-height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="left-side d-flex flex-column">
+        <div class="p-3">
+            <h2>Upload your PDF Files</h2>
+            <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+                <div class="form-group">
+                    <input type="file" class="form-control-file" name="pdf_files" multiple>
+                </div>
+                <button type="submit" class="btn btn-primary btn-submit">Upload & Process</button>
+            </form>
+        </div>
+        <div class="upload-section">
+            <div id="upload-status" class="file-list"></div>
+        </div>
+    </div>
+    <div class="right-side">
+        <h2>Ask a Question</h2>
+        <div class="form-group">
+            <input type="text" class="form-control" id="question" placeholder="Enter your question here">
+            <button id="ask-button" class="btn btn-primary mt-2">Submit</button>
+        </div>
+        <div id="response" class="response"></div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        document.getElementById('upload-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            var formData = new FormData(this);
+            var uploadStatus = document.getElementById('upload-status');
+            uploadStatus.innerHTML = '';
+
+            // Add file names to the status
+            for (let file of formData.getAll('pdf_files')) {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-name">${file.name}</div>
+                    <div class="progress-circle"></div>
+                `;
+                uploadStatus.appendChild(fileItem);
+            }
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.error) {
+                      uploadStatus.innerHTML += '<div class="text-danger">Error: ' + data.error + '</div>';
+                  } else {
+                      // Replace progress circle with green tick
+                      uploadStatus.querySelectorAll('.progress-circle').forEach(circle => {
+                          circle.className = 'progress-complete';
+                          circle.innerHTML = '✓';
+                      });
+                      document.querySelector('.btn-submit').classList.add('completed');
+                      uploadStatus.innerHTML += '<div class="text-success">Files uploaded: ' + data.filenames.join(', ') + '</div>';
+                  }
+              })
+              .catch(error => {
+                  uploadStatus.innerHTML += '<div class="text-danger">Error: ' + error + '</div>';
+              });
+        });
+
+        document.getElementById('ask-button').addEventListener('click', function() {
+            var question = document.getElementById('question').value;
+            var responseDiv = document.getElementById('response');
+            responseDiv.className = 'response';
+            responseDiv.innerHTML = 'Generating response...';
+
+            fetch('/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ question: question })
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.error) {
+                      responseDiv.className = 'response text-danger';
+                      responseDiv.innerHTML = 'Error: ' + data.error;
+                  } else {
+                      responseDiv.className = 'response text-success';
+                      responseDiv.innerHTML = data.response.output_text;
+                  }
+              })
+              .catch(error => {
+                  responseDiv.className = 'response text-danger';
+                  responseDiv.innerHTML = 'Error: ' + error;
+              });
+        });
+
+        document.getElementById('question').addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                document.getElementById('ask-button').click();
+            }
+        });
+    </script>
+</body>
+</html>

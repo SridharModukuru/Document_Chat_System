@@ -3,24 +3,29 @@ version: 2.1
 executors:
   docker-executor:
     docker:
-      - image: circleci/python:3.8  # Update to an appropriate version
+      - image: circleci/python:3.8  # Update this to your preferred base image
+    working_directory: ~/repo
 
 jobs:
   build-and-deploy:
     executor: docker-executor
     steps:
       - checkout
-      - setup_remote_docker
+      - setup_remote_docker:
+          version: 20.10.7  # Specify the Docker version
       - run:
           name: Install Docker Buildx
           command: |
+            mkdir -p ~/.docker/cli-plugins
+            curl -sSL https://github.com/docker/buildx/releases/download/v0.6.1/buildx-v0.6.1.linux-amd64 -o ~/.docker/cli-plugins/docker-buildx
+            chmod +x ~/.docker/cli-plugins/docker-buildx
             docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-            docker buildx create --name mybuilder
-            docker buildx use mybuilder
+            docker buildx create --use --name mybuilder
+            docker buildx inspect --bootstrap
       - run:
-          name: Build Docker Image
+          name: Build and Push Docker Image
           command: |
-            docker buildx build --platform linux/amd64,linux/arm64 -t your-image:tag .
+            docker buildx build --platform linux/amd64,linux/arm64 -t your-image:tag --push .
 
 workflows:
   version: 2
